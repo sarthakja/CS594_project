@@ -2,3 +2,4 @@
 ## Packages:
 - ```pip intsall pandas```
 - ```pip install openpyxl```
+- ```pip install biopython```
