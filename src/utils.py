@@ -3,6 +3,9 @@ import pandas as pd
 import networkx as nx
 from Bio.PDB.PDBList import PDBList
 from Bio.PDB import PDBParser, MMCIFParser
+from Bio.PDB.SASA import ShrakeRupley
+from Bio.PDB.DSSP import DSSP
+from Bio.PDB.PDBIO import PDBIO
 from itertools import combinations
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -129,7 +132,7 @@ def get_all_pdbs(filename, pdb_path):
       pdb_ids.append(pdb_id)
   return pdb_ids
 
-def make_graphs(attribute_file, residue_dict, site_dict, distance=7.0):
+def make_graphs(attribute_file, residue_dict):
 
     # read in the excel file
     df = pd.read_excel(attribute_file)
@@ -159,8 +162,8 @@ def make_graphs(attribute_file, residue_dict, site_dict, distance=7.0):
 
                 node_key = f"{key}_{residue.get_resname()}_{residue.id[1]}"
 
-
-
+                print(node_key)
+                print(df_res.iloc[0])
                 node = (node_key, {"res_name": one_hot_code_aa[residue.get_resname()],
                                    "res_ss": one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]],
                                    "ASA": df_res.iloc[0]["ASA"],
@@ -175,6 +178,8 @@ def make_graphs(attribute_file, residue_dict, site_dict, distance=7.0):
             G.add_edges_from(edges)
 
             graphs.append(G)
+
+    return graphs
 
 
 
@@ -192,3 +197,83 @@ def get_neighbor_res(residue_list, key, cutoff=7.0):
             edges.append((res1_key, res2_key))
 
     return edges
+def get_resn_attributes(pdb_id, binding_site_dict):
+
+  p = PDBParser()
+  path = dir + "/data/pdbs/{pdb_id}.pdb".format(pdb_id=pdb_id)
+  structure = p.get_structure(pdb_id, path)
+  model = structure[0]
+
+  try:
+    # Get DSSP
+    dssp = DSSP(model, path)
+  except Exception:
+    dssp = {}
+
+  # get the SASA
+  sr = ShrakeRupley()
+  sr.compute(structure, level="R")
+
+  residues_rows = []
+
+
+  for chol_site in binding_site_dict.keys():
+
+    site_id = "{pdb_id}_{chol_chain}_{chol_id}".format(pdb_id=pdb_id, chol_chain=chol_site.get_parent().id,
+                                                       chol_id=chol_site.id[1])
+
+    chain_set = set()
+
+    for res in binding_site_dict[chol_site].keys():
+
+      res_value = binding_site_dict[chol_site][res]
+      res_chain = res.get_parent()
+      key = (str(res_chain.id), res.id)
+
+      chain_set.add(str(res_chain.id))
+
+      if key in dssp.keys():
+        dssp_value = dssp[key]
+
+      else:
+        chain_path = dir + "/data/pdbs/{pdb_id}_{chain_id}.pdb".format(pdb_id=pdb_id, chain_id=res_chain.id)
+        if not os.path.isfile(chain_path):
+          for chain in structure.get_chains():
+            if chain.id == res_chain.id:
+              io = PDBIO()
+              io.set_structure(chain)
+              io.save(chain_path.replace(".pdb", "_temp.pdb"))
+
+          f = open(chain_path.replace(".pdb", "_temp.pdb"), 'r')
+          newf = open(chain_path, 'w')
+          lines = f.readlines()  # read old content
+
+          newf.write("CRYST1\n")  # write new content at the beginning
+
+          for line in lines:  # write old content after new
+            newf.write(line)
+          newf.close()
+          f.close()
+
+        smaller_structure = p.get_structure(pdb_id, chain_path)
+        smaller_model = smaller_structure[0]
+
+        small_dssp = DSSP(smaller_model, chain_path)
+
+        dssp_value = small_dssp[key]
+
+      sasa = round(model[str(res_chain.id)][res.id[1]].sasa, 2)
+
+
+      # attributes = (secondary structure, asa, phi, psi, sasa)
+      chol_atom = res_value[0]
+      res_atom = res_value[1]
+
+
+      attributes = [site_id, res.get_resname(), res.id[1], res_atom.id, chol_atom.id,
+                    round(chol_atom - res_atom, 2), dssp_value[2], round(dssp_value[3], 2),
+                    dssp_value[4], dssp_value[5], sasa]
+
+      residues_rows.append(attributes)
+
+  return residues_rows
