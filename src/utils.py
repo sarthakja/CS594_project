@@ -239,20 +239,20 @@ def generate_pytroch_graph(attribute_file, residue_dict, binding_site_list):
                     not_found = False
 
                     num_nodes = len(residue_dict[pdb][chol_res][0].keys())
-                    node_features = np.zeros((num_nodes, 33), dtype=float)
+                    node_features = np.zeros((num_nodes, 33), dtype=np.float64)
 
                     residues = list(residue_dict[pdb][chol_res][0].keys())
                     for i in range(len(residues)):
                         df_res = df.loc[(df["CHOL ID"] == key) & (df["RESIDUE NAME"] == residues[i].get_resname())
                                                                   & (df["RESIDUE SEQ"] == residues[i].id[1])]
 
-                        name = np.array(one_hot_code_aa[residues[i].get_resname()])
-                        ss = np.array(one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]])
-                        asa = np.array([df_res.iloc[0]["ASA"]])
-                        phi = np.array([df_res.iloc[0]["PHI"]])
-                        psi = np.array([df_res.iloc[0]["PSI"]])
-                        sasa = np.array([df_res.iloc[0]["SASA"]])
-                        feature = np.hstack((name, ss, asa, phi, psi, sasa))
+                        name = np.array(one_hot_code_aa[residues[i].get_resname()], dtype=np.float64)
+                        ss = np.array(one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]], dtype=np.float64)
+                        asa = np.array([df_res.iloc[0]["ASA"]], dtype=np.float64)
+                        phi = np.array([df_res.iloc[0]["PHI"]], dtype=np.float64)
+                        psi = np.array([df_res.iloc[0]["PSI"]], dtype=np.float64)
+                        sasa = np.array([df_res.iloc[0]["SASA"]], dtype=np.float64)
+                        feature = np.hstack((name, ss, asa, phi, psi, sasa), dtype=np.float64)
 
                         node_features[i] = feature
 
@@ -260,8 +260,8 @@ def generate_pytroch_graph(attribute_file, residue_dict, binding_site_list):
                     y = counter
 
                     neighbors = get_edge_index(residues)
-                    edge_index = torch.tensor(neighbors)
-                    data = Data(x=x, y=torch.tensor(y),  edge_index=edge_index.t().contiguous())
+                    edge_index = torch.tensor(neighbors, dtype=torch.int64)
+                    data = Data(x=x.double(), y=torch.tensor(y),  edge_index=edge_index.t().contiguous())
                     dataset.append(data)
                 counter += 1
 
