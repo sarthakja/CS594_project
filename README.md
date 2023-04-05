@@ -1,9 +1,10 @@
 # CS594 project
-## Packages:
+## Packages: 
 - ```pip intsall pandas```
 - ```pip install openpyxl```
 - ```pip install biopython```
 - ```pip install networkx ```
+- ```pip install torch torchvision```
 
 ## Structure:
 ```src``` folder contains:
