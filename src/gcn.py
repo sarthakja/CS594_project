@@ -1,22 +1,21 @@
 import os
 import pickle
+from utils import convert_pygraph
+from torch_geometric.loader import DataLoader
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dir = os.path.dirname(dir_path)
 
-graphs_path = dir + "/data/graphs.pkl"
+networkx_graphs_path = dir + "/data/graphs_040423.pkl"
 
-if os.path.isfile(graphs_path):
-    with open(graphs_path, "rb") as handle:
+if os.path.isfile(networkx_graphs_path):
+    with open(networkx_graphs_path, "rb") as handle:
         print("Retrieve the pickle!")
-        positive_graphs, negative_graphs = pickle.load(handle)
+        graphs, labels = pickle.load(handle)
 
-first_pos_graph = positive_graphs[0]
-print("Number of nodes (1st graphs for positive label graph list: ")
-print(first_pos_graph.number_of_nodes())
+dataset = convert_pygraph(graphs[:20], labels[:20])
+loader = DataLoader(dataset, batch_size=10)
 
-
-first_neg_graph = negative_graphs[0]
-print("Number of nodes (1st graphs for negative label graph list: ")
-print(first_neg_graph.number_of_nodes())
-# TODO put the GCN class over here and metric methods
+for batch in loader:
+    print(batch)
+    print(batch.num_graphs)

@@ -8,6 +8,11 @@ from Bio.PDB.DSSP import DSSP
 from Bio.PDB.PDBIO import PDBIO
 from itertools import combinations
 
+
+import pickle
+import torch
+from torch_geometric.utils.convert import  from_networkx
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dir = os.path.dirname(dir_path)
 
@@ -294,3 +299,16 @@ def get_resn_attributes(pdb_id, binding_site_dict):
       residues_rows.append(attributes)
 
   return residues_rows
+
+def convert_pygraph(graphs, labels):
+
+    dataset = []
+    for i in range(len(graphs)):
+
+        # Convert from NetworkX to PyTorch
+        pyg_graph = from_networkx(graphs[i])
+        pyg_graph.label = labels[i]
+        print(labels[i])
+        dataset.append(pyg_graph)
+
+    return dataset
