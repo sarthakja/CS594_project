@@ -1,7 +1,7 @@
 import os
 import pickle
 import pandas as pd
-from utils import make_graphs, get_all_pdbs, get_ligand_site, get_resn_attributes
+from utils import make_graphs, get_all_pdbs, get_ligand_site, get_resn_attributes, generate_pytroch_graph
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dir = os.path.dirname(dir_path)
@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     excel_path = dir + "/data/combined_sites_032923.xlsx"
     binding_site_list = dir + "/data/subclusters_0312.xlsx"
-    graphs_path = dir + "/data/graphs_040423.pkl"
+    graphs_path = dir + "/data/torch_graphs_040523.pkl"
 
     print("Start generate graphs")
 
@@ -25,11 +25,12 @@ if __name__ == '__main__':
 
     if not os.path.isfile(graphs_path):
 
-        # generate graph for local binding site
-        graphs, labels = make_graphs(excel_path, res_dict, binding_site_list)
+        datasets = generate_pytroch_graph(excel_path, res_dict, binding_site_list)
 
         f = open(graphs_path, "wb")
-        pickle.dump((graphs, labels), f)
+        pickle.dump(datasets, f)
+
+
 
 
 
