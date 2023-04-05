@@ -308,7 +308,28 @@ def convert_pygraph(graphs, labels):
         # Convert from NetworkX to PyTorch
         pyg_graph = from_networkx(graphs[i])
         pyg_graph.label = labels[i]
-        print(labels[i])
+
+        # data = [pyg_graph.res_name, pyg_graph.res_ss, torch.tensor(pyg_graph.ASA.tolist()),
+        #         torch.tensor(pyg_graph.PHI.tolist()), torch.tensor(pyg_graph.PSI.tolist()),torch.tensor(pyg_graph.SASA.tolist())]
+
+        data = [torch.tensor(pyg_graph.ASA.tolist()),
+                torch.tensor(pyg_graph.PHI.tolist()), torch.tensor(pyg_graph.PSI.tolist()),
+                torch.tensor(pyg_graph.SASA.tolist())]
+        print(data)
+        # Determine maximum length
+        max_len = max([x.squeeze().numel() for x in data])
+
+        print(max_len)
+
+        # pad all tensors to have same length
+        data = [torch.nn.functional.pad(x, pad=(0, max_len - x.numel()), mode='constant', value=0) for x in data]
+
+        # stack them
+        data = torch.stack(data)
+
+        print(data)
+
+        pyg_graph.x = data
         dataset.append(pyg_graph)
 
     return dataset
