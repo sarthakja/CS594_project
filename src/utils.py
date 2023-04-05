@@ -132,14 +132,21 @@ def get_all_pdbs(filename, pdb_path):
       pdb_ids.append(pdb_id)
   return pdb_ids
 
-def make_graphs(attribute_file, residue_dict):
+def make_graphs(attribute_file, residue_dict, binding_site_list):
 
     # read in the excel file
     df = pd.read_excel(attribute_file)
 
+    # read in the clusters
+    clusters_df = pd.read_excel(binding_site_list)
+
+    column_name = list(clusters_df.columns)
+
     graphs = []
+    labels = []
 
     for pdb in residue_dict.keys():
+        print(pdb)
 
         for chol_res in residue_dict[pdb].keys():
 
@@ -153,33 +160,43 @@ def make_graphs(attribute_file, residue_dict):
             chol_resi = chol_res.id[1]
 
             key = f"{pdb}_{chol_chain}_{chol_resi}"
-            print(key)
 
-            for residue in residue_dict[pdb][chol_res].keys():
-                df_res = df.loc[(df["CHOL ID"] == key) & (df["RESIDUE NAME"] == residue.get_resname())
-                                                          & (df["RESIDUE SEQ"] == residue.id[1])]
-                # print(df_res.iloc[0]["PERCENT NON POLAR"])
+            not_found = True
+            counter = 0
 
-                node_key = f"{key}_{residue.get_resname()}_{residue.id[1]}"
+            while not_found and counter < len(column_name):
 
-                print(node_key)
-                print(df_res.iloc[0])
-                node = (node_key, {"res_name": one_hot_code_aa[residue.get_resname()],
-                                   "res_ss": one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]],
-                                   "ASA": df_res.iloc[0]["ASA"],
-                                   "PHI": df_res.iloc[0]["PHI"],
-                                   "PSI": df_res.iloc[0]["PSI"],
-                                   "SASA": df_res.iloc[0]["PSI"]})
-                nodes.append(node)
+                if f"{pdb.upper()}_{chol_resi}_{chol_chain}" in clusters_df[column_name[counter]].values:
+                    labels.append(counter)
+
+                    not_found = False
+
+                    for residue in residue_dict[pdb][chol_res][0].keys():
+                        df_res = df.loc[(df["CHOL ID"] == key) & (df["RESIDUE NAME"] == residue.get_resname())
+                                                                  & (df["RESIDUE SEQ"] == residue.id[1])]
+
+                        node_key = f"{key}_{residue.get_resname()}_{residue.id[1]}"
+
+                        node = (node_key, {"res_name": one_hot_code_aa[residue.get_resname()],
+                                           "res_ss": one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]],
+                                           "ASA": df_res.iloc[0]["ASA"],
+                                           "PHI": df_res.iloc[0]["PHI"],
+                                           "PSI": df_res.iloc[0]["PSI"],
+                                           "SASA": df_res.iloc[0]["PSI"]})
+                        nodes.append(node)
 
 
-            G.add_nodes_from(nodes)
-            edges = get_neighbor_res(residue_dict[pdb][chol_res].keys(), key)
-            G.add_edges_from(edges)
+                    G.add_nodes_from(nodes)
+                    edges = get_neighbor_res(residue_dict[pdb][chol_res][0].keys(), key)
+                    G.add_edges_from(edges)
 
-            graphs.append(G)
+                    graphs.append(G)
 
-    return graphs
+                counter += 1
+
+    print(labels)
+    print(len(graphs))
+    return graphs, labels
 
 
 
