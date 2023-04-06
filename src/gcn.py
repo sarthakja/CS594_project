@@ -10,6 +10,12 @@ import torch.nn.functional as F
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import GCNConv, global_mean_pool
 
+import pandas as pd
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+import numpy as np
+import matplotlib.pyplot as plt
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dir = os.path.dirname(dir_path)
 
@@ -87,15 +93,34 @@ def test(loader):
     model.eval()
 
     correct = 0
+    y_pred_list = []
+    y_label_list = []
+
     for data in loader:
         out = model(data.x, data.edge_index, data.batch)
         pred = out.argmax(dim=1)
         correct += int((pred == data.y).sum())
-    return correct / len(loader.dataset)
+        y_pred_list += list(pred.data.cpu().numpy())
+        y_label_list += list(data.y.data.cpu().numpy())
+    accuracy = correct / len(loader.dataset)
+    return accuracy, y_pred_list, y_label_list
 
 
-for epoch in range(1, 171):
+for epoch in range(1, 30):
     train()
-    train_acc = test(train_loader)
-    test_acc = test(test_loader)
-    print(f'Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Test Acc: {test_acc:.4f}')
+    train_acc, train_pred, train_label = test(train_loader)
+    test_acc, test_pred, test_label = test(test_loader)
+
+    print(f'Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Test Acc: {test_acc}')
+
+
+# constant for classes
+classes = (0,1,2,3,4,5,6)
+
+# Build confusion matrix
+cf_matrix = confusion_matrix(test_label, test_pred)
+df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index=[i for i in classes],
+                     columns=[i for i in classes])
+plt.figure(figsize=(12, 7))
+sns.heatmap(df_cm, annot=True)
+plt.savefig(dir + '/data/confusion_matrix.png')
