@@ -8,6 +8,14 @@ from Bio.PDB.DSSP import DSSP
 from Bio.PDB.PDBIO import PDBIO
 from itertools import combinations
 
+import numpy as np
+from torch_geometric.data import Data
+
+
+import pickle
+import torch
+from torch_geometric.utils.convert import  from_networkx
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dir = os.path.dirname(dir_path)
 
@@ -132,14 +140,21 @@ def get_all_pdbs(filename, pdb_path):
       pdb_ids.append(pdb_id)
   return pdb_ids
 
-def make_graphs(attribute_file, residue_dict):
+def make_graphs(attribute_file, residue_dict, binding_site_list):
 
     # read in the excel file
     df = pd.read_excel(attribute_file)
 
+    # read in the clusters
+    clusters_df = pd.read_excel(binding_site_list)
+
+    column_name = list(clusters_df.columns)
+
     graphs = []
+    labels = []
 
     for pdb in residue_dict.keys():
+        print(pdb)
 
         for chol_res in residue_dict[pdb].keys():
 
@@ -153,34 +168,104 @@ def make_graphs(attribute_file, residue_dict):
             chol_resi = chol_res.id[1]
 
             key = f"{pdb}_{chol_chain}_{chol_resi}"
-            print(key)
 
-            for residue in residue_dict[pdb][chol_res].keys():
-                df_res = df.loc[(df["CHOL ID"] == key) & (df["RESIDUE NAME"] == residue.get_resname())
-                                                          & (df["RESIDUE SEQ"] == residue.id[1])]
-                # print(df_res.iloc[0]["PERCENT NON POLAR"])
+            not_found = True
+            counter = 0
 
-                node_key = f"{key}_{residue.get_resname()}_{residue.id[1]}"
+            while not_found and counter < len(column_name):
 
-                print(node_key)
-                print(df_res.iloc[0])
-                node = (node_key, {"res_name": one_hot_code_aa[residue.get_resname()],
-                                   "res_ss": one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]],
-                                   "ASA": df_res.iloc[0]["ASA"],
-                                   "PHI": df_res.iloc[0]["PHI"],
-                                   "PSI": df_res.iloc[0]["PSI"],
-                                   "SASA": df_res.iloc[0]["PSI"]})
-                nodes.append(node)
+                if f"{pdb.upper()}_{chol_resi}_{chol_chain}" in clusters_df[column_name[counter]].values:
+                    labels.append(counter)
+
+                    not_found = False
+
+                    for residue in residue_dict[pdb][chol_res][0].keys():
+                        df_res = df.loc[(df["CHOL ID"] == key) & (df["RESIDUE NAME"] == residue.get_resname())
+                                                                  & (df["RESIDUE SEQ"] == residue.id[1])]
+
+                        node_key = f"{key}_{residue.get_resname()}_{residue.id[1]}"
+
+                        node = (node_key, {"res_name": one_hot_code_aa[residue.get_resname()],
+                                           "res_ss": one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]],
+                                           "ASA": df_res.iloc[0]["ASA"],
+                                           "PHI": df_res.iloc[0]["PHI"],
+                                           "PSI": df_res.iloc[0]["PSI"],
+                                           "SASA": df_res.iloc[0]["PSI"]})
+                        nodes.append(node)
 
 
-            G.add_nodes_from(nodes)
-            edges = get_neighbor_res(residue_dict[pdb][chol_res].keys(), key)
-            G.add_edges_from(edges)
+                    G.add_nodes_from(nodes)
+                    edges = get_neighbor_res(residue_dict[pdb][chol_res][0].keys(), key)
+                    G.add_edges_from(edges)
 
-            graphs.append(G)
+                    graphs.append(G)
 
-    return graphs
+                counter += 1
 
+    print(labels)
+    print(len(graphs))
+    return graphs, labels
+
+
+def generate_pytroch_graph(attribute_file, residue_dict, binding_site_list):
+
+    # read in the excel file
+    df = pd.read_excel(attribute_file)
+
+    # read in the clusters
+    clusters_df = pd.read_excel(binding_site_list)
+
+    column_name = list(clusters_df.columns)
+
+    dataset = []
+
+    for pdb in residue_dict.keys():
+        print(pdb)
+
+        for chol_res in residue_dict[pdb].keys():
+
+            chol_chain = chol_res.get_parent().id
+            chol_resi = chol_res.id[1]
+
+            key = f"{pdb}_{chol_chain}_{chol_resi}"
+
+            not_found = True
+            counter = 0
+
+            while not_found and counter < len(column_name):
+
+                if f"{pdb.upper()}_{chol_resi}_{chol_chain}" in clusters_df[column_name[counter]].values:
+
+                    not_found = False
+
+                    num_nodes = len(residue_dict[pdb][chol_res][0].keys())
+                    node_features = np.zeros((num_nodes, 33), dtype=np.float64)
+
+                    residues = list(residue_dict[pdb][chol_res][0].keys())
+                    for i in range(len(residues)):
+                        df_res = df.loc[(df["CHOL ID"] == key) & (df["RESIDUE NAME"] == residues[i].get_resname())
+                                                                  & (df["RESIDUE SEQ"] == residues[i].id[1])]
+
+                        name = np.array(one_hot_code_aa[residues[i].get_resname()], dtype=np.float64)
+                        ss = np.array(one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]], dtype=np.float64)
+                        asa = np.array([df_res.iloc[0]["ASA"]], dtype=np.float64)
+                        phi = np.array([df_res.iloc[0]["PHI"]], dtype=np.float64)
+                        psi = np.array([df_res.iloc[0]["PSI"]], dtype=np.float64)
+                        sasa = np.array([df_res.iloc[0]["SASA"]], dtype=np.float64)
+                        feature = np.hstack((name, ss, asa, phi, psi, sasa), dtype=np.float64)
+
+                        node_features[i] = feature
+
+                    x = torch.from_numpy(node_features)
+                    y = counter
+
+                    neighbors = get_edge_index(residues)
+                    edge_index = torch.tensor(neighbors, dtype=torch.int64)
+                    data = Data(x=x.double(), y=torch.tensor(y),  edge_index=edge_index.t().contiguous())
+                    dataset.append(data)
+                counter += 1
+
+    return dataset
 
 
 def get_neighbor_res(residue_list, key, cutoff=7.0):
@@ -195,6 +280,19 @@ def get_neighbor_res(residue_list, key, cutoff=7.0):
         distance = res1["CA"] - res2["CA"]
         if distance < cutoff:
             edges.append((res1_key, res2_key))
+
+    return edges
+
+def get_edge_index(residue_list, cutoff=7.0):
+
+    all_pairs = combinations(residue_list, 2)
+    edges = []
+
+    for res1, res2 in all_pairs:
+
+        distance = res1["CA"] - res2["CA"]
+        if distance < cutoff:
+            edges.append((residue_list.index(res1), residue_list.index(res2)))
 
     return edges
 def get_resn_attributes(pdb_id, binding_site_dict):
@@ -277,3 +375,44 @@ def get_resn_attributes(pdb_id, binding_site_dict):
       residues_rows.append(attributes)
 
   return residues_rows
+
+def convert_pygraph(graphs, labels):
+
+    dataset = []
+    for i in range(len(graphs)):
+        graph = graphs[i]
+        # Convert from NetworkX to PyTorch
+        num_nodes = graph.number_of_nodes()
+        node_features = np.zeros((num_nodes, 6), dtype=object)
+
+        for i, node in enumerate(graph.nodes()):
+            # dictionary of node features
+            node_dict = graph.nodes[node]
+            node_dict['res_name'] = np.array(node_dict['res_name'])
+            node_dict['res_ss'] = np.array(node_dict['res_ss'])
+
+            for j, (key, val) in enumerate(node_dict.items()):
+                if isinstance(val, float):
+                    node_features[i, j] = np.array([val])
+                else:
+                    node_features[i, j] = val
+
+        pyg_graph = from_networkx(graphs[i])
+        pyg_graph.label = labels[i]
+
+        node_features = torch.zeros((pyg_graph.num_nodes, 6))
+
+        for i, node in enumerate(pyg_graph.nodes()):
+            # dictionary of node features
+            node_dict = pyg_graph.nodes[node]
+            node_dict['res_name'] = torch.tensor(node_dict['res_name'])
+            node_dict['res_ss'] = torch.tensor(node_dict['res_ss'])
+
+            for j, (key, val) in enumerate(node_dict.items()):
+                if isinstance(val, float):
+                    node_features[i, j] = torch.tensor([val])
+                else:
+                    node_features[i, j] = val
+
+        print(node_features)
+
