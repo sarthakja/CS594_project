@@ -19,6 +19,8 @@ from torch_geometric.utils.convert import  from_networkx
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dir = os.path.dirname(dir_path)
 
+resolution_path = dir + "/data/resolution_methods_040423.xlsx"
+
 # 20 amino acid
 one_hot_code_aa = {
         'ALA': [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -215,56 +217,70 @@ def generate_pytroch_graph(attribute_file, residue_dict, binding_site_list):
     # read in the clusters
     clusters_df = pd.read_excel(binding_site_list)
 
+    res_df = pd.read_excel(resolution_path)
+
     column_name = list(clusters_df.columns)
 
     dataset = []
 
+    unique_chol = set()
+
     for pdb in residue_dict.keys():
         print(pdb)
 
-        for chol_res in residue_dict[pdb].keys():
+        # check resolution
+        resolution = res_df[res_df["PDB ID"] == pdb.lower()]["RESOLUTION"].values[0]
 
-            chol_chain = chol_res.get_parent().id
-            chol_resi = chol_res.id[1]
+        if resolution <= 3.5:
 
-            key = f"{pdb}_{chol_chain}_{chol_resi}"
+            for chol_res in residue_dict[pdb].keys():
 
-            not_found = True
-            counter = 0
+                chol_chain = chol_res.get_parent().id
+                chol_resi = chol_res.id[1]
 
-            while not_found and counter < len(column_name):
+                key = f"{pdb}_{chol_chain}_{chol_resi}"
 
-                if f"{pdb.upper()}_{chol_resi}_{chol_chain}" in clusters_df[column_name[counter]].values:
+                not_found = True
+                counter = 0
 
-                    not_found = False
+                unique_chol_id = f"{pdb}_{chol_resi}"
 
-                    num_nodes = len(residue_dict[pdb][chol_res][0].keys())
-                    node_features = np.zeros((num_nodes, 33), dtype=np.float64)
+                # only get the pdb if the cluster is unique
+                if unique_chol_id not in unique_chol:
+                    unique_chol.add(unique_chol_id)
+                    # find the pdb in the clusters
+                    while not_found and counter < len(column_name):
 
-                    residues = list(residue_dict[pdb][chol_res][0].keys())
-                    for i in range(len(residues)):
-                        df_res = df.loc[(df["CHOL ID"] == key) & (df["RESIDUE NAME"] == residues[i].get_resname())
-                                                                  & (df["RESIDUE SEQ"] == residues[i].id[1])]
+                        if f"{pdb.upper()}_{chol_resi}_{chol_chain}" in clusters_df[column_name[counter]].values:
 
-                        name = np.array(one_hot_code_aa[residues[i].get_resname()], dtype=np.float64)
-                        ss = np.array(one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]], dtype=np.float64)
-                        asa = np.array([df_res.iloc[0]["ASA"]], dtype=np.float64)
-                        phi = np.array([df_res.iloc[0]["PHI"]], dtype=np.float64)
-                        psi = np.array([df_res.iloc[0]["PSI"]], dtype=np.float64)
-                        sasa = np.array([df_res.iloc[0]["SASA"]], dtype=np.float64)
-                        feature = np.hstack((name, ss, asa, phi, psi, sasa), dtype=np.float64)
+                            not_found = False
 
-                        node_features[i] = feature
+                            num_nodes = len(residue_dict[pdb][chol_res][0].keys())
+                            node_features = np.zeros((num_nodes, 33), dtype=np.float64)
 
-                    x = torch.from_numpy(node_features)
-                    y = counter
+                            residues = list(residue_dict[pdb][chol_res][0].keys())
+                            for i in range(len(residues)):
+                                df_res = df.loc[(df["CHOL ID"] == key) & (df["RESIDUE NAME"] == residues[i].get_resname())
+                                                                          & (df["RESIDUE SEQ"] == residues[i].id[1])]
 
-                    neighbors = get_edge_index(residues)
-                    edge_index = torch.tensor(neighbors, dtype=torch.int64)
-                    data = Data(x=x.double(), y=torch.tensor(y),  edge_index=edge_index.t().contiguous())
-                    dataset.append(data)
-                counter += 1
+                                name = np.array(one_hot_code_aa[residues[i].get_resname()], dtype=np.float64)
+                                ss = np.array(one_hot_code_ss[df_res.iloc[0]["SECONDARY STRUCTURE"]], dtype=np.float64)
+                                asa = np.array([df_res.iloc[0]["ASA"]], dtype=np.float64)
+                                phi = np.array([df_res.iloc[0]["PHI"]], dtype=np.float64)
+                                psi = np.array([df_res.iloc[0]["PSI"]], dtype=np.float64)
+                                sasa = np.array([df_res.iloc[0]["SASA"]], dtype=np.float64)
+                                feature = np.hstack((name, ss, asa, phi, psi, sasa), dtype=np.float64)
 
+                                node_features[i] = feature
+
+                            x = torch.from_numpy(node_features)
+                            y = counter
+
+                            neighbors = get_edge_index(residues)
+                            edge_index = torch.tensor(neighbors, dtype=torch.int64)
+                            data = Data(x=x.double(), y=torch.tensor(y),  edge_index=edge_index.t().contiguous())
+                            dataset.append(data)
+                        counter += 1
     return dataset
 
 

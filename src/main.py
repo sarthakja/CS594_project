@@ -12,10 +12,12 @@ if __name__ == '__main__':
     pdb_path = dir + "/data/pdbs/"
     pdbs_list = dir + "/data/chol_pdbs.txt"
     active_site_pickle =pdbs_list.replace("txt", "pkl")
+    resolution_path = dir + "/data/resolution_methods_040423.xlsx"
 
     excel_path = dir + "/data/combined_sites_032923.xlsx"
-    binding_site_list = dir + "/data/subclusters_0312.xlsx"
-    graphs_path = dir + "/data/torch_graphs_040523.pkl"
+    binding_site_list = dir + "/data/subclusters_041723.xlsx"
+
+    graphs_path = dir + "/data/torch_graphs_041723_v2.pkl"
 
     print("Start generate graphs")
 

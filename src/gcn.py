@@ -1,6 +1,5 @@
 import os
 import pickle
-from utils import convert_pygraph
 import random
 
 import torch
@@ -19,7 +18,8 @@ import matplotlib.pyplot as plt
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dir = os.path.dirname(dir_path)
 
-networkx_graphs_path = dir + "/data/torch_graphs_040523.pkl"
+networkx_graphs_path = dir + "/data/torch_graphs_041723_v2.pkl"
+conf_matrix_path = dir + '/data/CM_041723_v2.png'
 
 if os.path.isfile(networkx_graphs_path):
     with open(networkx_graphs_path, "rb") as handle:
@@ -27,15 +27,18 @@ if os.path.isfile(networkx_graphs_path):
         dataset = pickle.load(handle)
 
 
-NUM_CLASSES = 7
+NUM_CLASSES = 6
 NUM_NODE_FEATURES = 33
 
 torch.manual_seed(12345)
 #shuffle the dataset
 random.shuffle(dataset)
 
-train_dataset = dataset[:1050]
-test_dataset = dataset[1050:]
+print(f"NUmber of graphs in the datasets: {len(dataset)}")
+size_train = int(len(dataset)*0.7)
+print(f"The size of the training set is: {size_train}")
+train_dataset = dataset[:size_train]
+test_dataset = dataset[size_train:]
 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
@@ -106,7 +109,7 @@ def test(loader):
     return accuracy, y_pred_list, y_label_list
 
 
-for epoch in range(1, 30):
+for epoch in range(1, 100):
     train()
     train_acc, train_pred, train_label = test(train_loader)
     test_acc, test_pred, test_label = test(test_loader)
@@ -115,7 +118,7 @@ for epoch in range(1, 30):
 
 
 # constant for classes
-classes = (0,1,2,3,4,5,6)
+classes = (0,1,2,3,4,5)
 
 # Build confusion matrix
 cf_matrix = confusion_matrix(test_label, test_pred)
@@ -123,4 +126,4 @@ df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index=[i fo
                      columns=[i for i in classes])
 plt.figure(figsize=(12, 7))
 sns.heatmap(df_cm, annot=True)
-plt.savefig(dir + '/data/confusion_matrix.png')
+plt.savefig(conf_matrix_path)
