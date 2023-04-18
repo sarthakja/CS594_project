@@ -1,6 +1,6 @@
 # CS594 project
 ## Packages: 
-- ```pip intsall pandas```
+- ```pip install pandas```
 - ```pip install openpyxl```
 - ```pip install biopython```
 - ```pip install networkx ```
@@ -17,9 +17,16 @@
 ```data``` folder contains:
 - ```graphs_040423.pkl```: unpickle this will return ```graphs, labels```. Graphs: A Python list contains graphs in NetWorkX format, and labels: contains the label of the graphs list. 
 
+- [X] Loss function
+- [X] MLP before/ aftrer GNN 
+- [X] Evaluation metrics
+- [X] different model: GAT, GIN GraphSAGE 
+- [X] balancing the data if possible
+
 ## TODO 
-- [ ] Loss function
-- [ ] MLP before/ aftrer GNN 
-- [ ] Evaluation metrics
-- [ ] different model: GAT, GIN GraphSAGE 
-- [ ] balancing the data if possible 
+- [ ] metrics for evaluation
+- [ ] loss function
+- [ ] models 
+
+Limitation:
+- small number of graphs 
