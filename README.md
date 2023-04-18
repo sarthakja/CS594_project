@@ -28,5 +28,7 @@
 - [ ] loss function
 - [ ] models 
 
+- [ ] change the spliting of training and test 
+
 Limitation:
 - small number of graphs 
