@@ -23,18 +23,18 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 date = "042523"
 num_epoches = 2000
-graph_CM = False
+graph_CM = True
 graph_F1 = True
 
 
-networkx_graphs_path = dir + "/data/torch_graphs_041723_v2.pkl"
+networkx_graphs_path = dir + "/data/torch_graphs_042323.pkl"
 macro_path = dir + f"/data/GCN_macro_{date}_ep{num_epoches}.txt"
 
 if graph_CM:
     conf_matrix_path = dir + f'/data/CM_GCN_{date}.png'
 
 if graph_F1:
-    train_test_f1_path = dir + f"/data/f1_{date}_ep{num_epoches}.png"
+    train_test_f1_path = dir + f"/data/f1_gcn_{date}_ep{num_epoches}.png"
 
 if os.path.isfile(networkx_graphs_path):
     with open(networkx_graphs_path, "rb") as handle:
@@ -75,10 +75,16 @@ classWeights = maxClassGraphs/labelCount
 classWeights = torch.from_numpy(classWeights)
 print(classWeights)
 
-train_dataset , test_dataset = train_test_split(dataset, test_size=0.2, stratify=labels)
+train_dataset , test_dataset = train_test_split(dataset, test_size=0.3, stratify=labels)
+
+train_labels = np.empty(len(train_dataset))
+for i in range(len(train_dataset)):
+  train_labels[i] = train_dataset[i].y.item()
+train_dataset , validation_dataset = train_test_split(train_dataset, test_size=0.2, stratify=train_labels)
 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+validation_loader = DataLoader(validation_dataset, batch_size=64, shuffle=False)
 
 for step, data in enumerate(train_loader):
     print(f'Step {step + 1}:')
@@ -172,11 +178,12 @@ for epoch in range(1, num_epoches):
               f'Test F1: {test_f1Score:.4f}')
 
 
+val_acc, val_f1Score, val_pred, val_label = test(validation_loader)
 
 with open(macro_path, "w") as f:
     f.write("Macro F1 for GCN model\n")
     # Print the precision and recall, among other metrics for testing set
-    macro = classification_report(test_labels, test_preds, digits=3)
+    macro = classification_report(val_label, val_pred, digits=3)
     print(macro)
     f.write(macro)
 
@@ -185,7 +192,7 @@ classes = (0,1,2,3,4,5)
 
 if graph_CM:
     # Build confusion matrix
-    cf_matrix = confusion_matrix(test_label, test_pred)
+    cf_matrix = confusion_matrix(val_label, val_pred)
     df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index=[i for i in classes],
                          columns=[i for i in classes])
     plt.figure(figsize=(12, 7))
@@ -193,7 +200,8 @@ if graph_CM:
     plt.savefig(conf_matrix_path)
 
 if graph_F1:
-    # Graphs the macro f1 metrics
+    plt.figure(figsize=(12, 7))
+    # Graphs the f1 metrics
     plt.plot(epoches, test_f1, label="Test f1 score")
     plt.plot(epoches, train_f1, label="Train  f1 score")
     plt.legend()
