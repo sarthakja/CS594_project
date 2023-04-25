@@ -11,15 +11,28 @@ from torch_geometric.nn import GCNConv, global_mean_pool
 
 import pandas as pd
 import seaborn as sns
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, f1_score, classification_report
+from sklearn.model_selection import train_test_split
 import numpy as np
 import matplotlib.pyplot as plt
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dir = os.path.dirname(dir_path)
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+date = "042523"
+graph_CM = False
+graph_F1 = True
+
+
 networkx_graphs_path = dir + "/data/torch_graphs_041723_v2.pkl"
-conf_matrix_path = dir + '/data/CM_041723_v2.png'
+macro_path = dir + f"/data/GCN_macro_{date}.txt"
+if graph_CM:
+    conf_matrix_path = dir + f'/data/CM_GCN_{date}.png'
+
+if graph_F1:
+    train_test_f1_path = dir + f"/data/f1_{date}"
 
 if os.path.isfile(networkx_graphs_path):
     with open(networkx_graphs_path, "rb") as handle:
@@ -31,14 +44,36 @@ NUM_CLASSES = 6
 NUM_NODE_FEATURES = 33
 
 torch.manual_seed(12345)
+
 #shuffle the dataset
 random.shuffle(dataset)
 
 print(f"NUmber of graphs in the datasets: {len(dataset)}")
-size_train = int(len(dataset)*0.7)
-print(f"The size of the training set is: {size_train}")
-train_dataset = dataset[:size_train]
-test_dataset = dataset[size_train:]
+
+
+#Class label for each graph in labels
+labels = np.empty(len(dataset))
+for i in range(len(dataset)):
+  labels[i] = dataset[i].y.item()
+
+#labelCount stores the no of graphs for each class
+labelCount = np.zeros(NUM_CLASSES)
+
+#labelCount = {}
+for i in range(len(labels)):
+
+  labelCount[int(labels[i])]+=1
+
+print(labelCount)
+
+maxClassGraphs = np.amax(labelCount)
+
+#Calculating class weights
+classWeights = maxClassGraphs/labelCount
+classWeights = torch.from_numpy(classWeights)
+print(classWeights)
+
+train_dataset , test_dataset = train_test_split(dataset, test_size=0.2, stratify=labels)
 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
@@ -79,7 +114,10 @@ model = GCN(hidden=64)
 model = model.to(torch.float64)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-criterion = torch.nn.CrossEntropyLoss()
+# criterion = torch.nn.CrossEntropyLoss()
+
+classWeights = classWeights.to(device)
+criterion = torch.nn.CrossEntropyLoss(weight=classWeights)
 
 def train():
     model.train()
@@ -106,24 +144,55 @@ def test(loader):
         y_pred_list += list(pred.data.cpu().numpy())
         y_label_list += list(data.y.data.cpu().numpy())
     accuracy = correct / len(loader.dataset)
-    return accuracy, y_pred_list, y_label_list
+    f1Score = f1_score(y_label_list, y_pred_list, average='weighted')
+    return accuracy, f1Score, y_pred_list, y_label_list
 
+test_f1 = []
+train_f1 = []
+epoches = []
+test_preds = []
+test_labels = []
 
-for epoch in range(1, 100):
+for epoch in range(1, 2000):
+    epoches.append(epoch)
+
     train()
-    train_acc, train_pred, train_label = test(train_loader)
-    test_acc, test_pred, test_label = test(test_loader)
+    train_acc, train_f1Score, train_pred, train_label = test(train_loader)
+    test_acc, test_f1Score, test_pred, test_label = test(test_loader)
 
-    print(f'Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Test Acc: {test_acc}')
+    test_labels += list(test_label)
+    test_preds += list(test_pred)
 
+    if epoch % 20 == 0:
+        train_f1.append(train_f1Score)
+        test_f1.append(test_f1Score)
+        print(f'Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Test Acc: {test_acc}, Train F1: {train_f1Score: .4f}, '
+              f'Test F1: {test_f1Score:.4f}')
+
+
+with open(macro_path, "w") as f:
+    # Print the precision and recall, among other metrics for testing set
+    macro = classification_report(test_labels, test_preds, digits=3)
+    print(macro)
+    f.write(macro)
 
 # constant for classes
 classes = (0,1,2,3,4,5)
 
-# Build confusion matrix
-cf_matrix = confusion_matrix(test_label, test_pred)
-df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index=[i for i in classes],
-                     columns=[i for i in classes])
-plt.figure(figsize=(12, 7))
-sns.heatmap(df_cm, annot=True)
-plt.savefig(conf_matrix_path)
+if graph_CM:
+    # Build confusion matrix
+    cf_matrix = confusion_matrix(test_label, test_pred)
+    df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index=[i for i in classes],
+                         columns=[i for i in classes])
+    plt.figure(figsize=(12, 7))
+    sns.heatmap(df_cm, annot=True)
+    plt.savefig(conf_matrix_path)
+
+if graph_F1:
+    # Graphs the macro f1 metrics
+    plt.plot(epoches, test_f1, label="Test f1 score")
+    plt.plot(epoches, train_f1, label="Train  f1 score")
+    plt.legend()
+    plt.savefig(train_test_f1_path)
+    plt.show()
+    plt.close()
