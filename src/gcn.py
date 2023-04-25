@@ -22,17 +22,19 @@ dir = os.path.dirname(dir_path)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 date = "042523"
+num_epoches = 2000
 graph_CM = False
 graph_F1 = True
 
 
 networkx_graphs_path = dir + "/data/torch_graphs_041723_v2.pkl"
-macro_path = dir + f"/data/GCN_macro_{date}.txt"
+macro_path = dir + f"/data/GCN_macro_{date}_ep{num_epoches}.txt"
+
 if graph_CM:
     conf_matrix_path = dir + f'/data/CM_GCN_{date}.png'
 
 if graph_F1:
-    train_test_f1_path = dir + f"/data/f1_{date}"
+    train_test_f1_path = dir + f"/data/f1_{date}_ep{num_epoches}.png"
 
 if os.path.isfile(networkx_graphs_path):
     with open(networkx_graphs_path, "rb") as handle:
@@ -153,8 +155,7 @@ epoches = []
 test_preds = []
 test_labels = []
 
-for epoch in range(1, 2000):
-    epoches.append(epoch)
+for epoch in range(1, num_epoches):
 
     train()
     train_acc, train_f1Score, train_pred, train_label = test(train_loader)
@@ -164,13 +165,16 @@ for epoch in range(1, 2000):
     test_preds += list(test_pred)
 
     if epoch % 20 == 0:
+        epoches.append(epoch)
         train_f1.append(train_f1Score)
         test_f1.append(test_f1Score)
         print(f'Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Test Acc: {test_acc}, Train F1: {train_f1Score: .4f}, '
               f'Test F1: {test_f1Score:.4f}')
 
 
+
 with open(macro_path, "w") as f:
+    f.write("Macro F1 for GCN model\n")
     # Print the precision and recall, among other metrics for testing set
     macro = classification_report(test_labels, test_preds, digits=3)
     print(macro)
